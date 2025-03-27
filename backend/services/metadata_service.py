@@ -542,34 +542,36 @@ class MetadataService:
         return models
     
     def get_model(self, model_id: str) -> Optional[Dict[str, Any]]:
-        """Get a specific model by ID"""
-        for model in self.metadata.get("models", []):
-            if model["id"] == model_id:
-                print(f"Found model with ID {model_id}: {model['name']}")
-                
-                # Ensure all necessary fields have default values
-                result = model.copy()
-                
-                # Add default values for any missing fields
-                defaults = {
-                    "description": "",
-                    "schema": "default",
-                    "materialized": "view",
-                    "file_path": "N/A",
-                    "columns": [],
-                    "sql": "",
-                    "tags": []
-                }
-                
-                for key, default_value in defaults.items():
-                    if key not in result or result[key] is None:
-                        result[key] = default_value
-                
-                return result
-                
-        print(f"Model with ID {model_id} not found")
+        """Get a model by ID"""
+        models = self.metadata.get("models", [])
+        for model in models:
+            if model.get("id") == model_id:
+                return model
         return None
-    
+
+    def update_model(self, model_id: str, updated_model: Dict[str, Any]) -> bool:
+        """Update a model with new data"""
+        try:
+            # Find the model in the metadata
+            models = self.metadata.get("models", [])
+            for i, model in enumerate(models):
+                if model.get("id") == model_id:
+                    # Update the model
+                    models[i] = updated_model
+                    
+                    # Save the updated metadata
+                    with open(self.unified_metadata_path, 'w') as f:
+                        json.dump(self.metadata, f, indent=2)
+                    
+                    print(f"Updated model: {model_id}")
+                    return True
+                    
+            print(f"Model not found: {model_id}")
+            return False
+        except Exception as e:
+            print(f"Error updating model: {str(e)}")
+            return False
+
     def get_model_with_lineage(self, model_id: str) -> Optional[Dict[str, Any]]:
         """Get a model with its upstream and downstream lineage"""
         # Validate model_id to prevent NaN values

@@ -14,6 +14,7 @@ import tempfile
 
 from backend.services.metadata_service import MetadataService
 from backend.services.file_watcher_service import FileWatcherService
+from backend.services.ai_description_service import AIDescriptionService
 
 # Load environment variables
 load_dotenv()
@@ -49,6 +50,9 @@ file_watcher = FileWatcherService(
     refresh_callback=metadata_service.refresh,
     watch_interval=int(os.environ.get("WATCHER_POLL_INTERVAL", 30))  # Check interval in seconds
 )
+
+# Initialize AI service
+ai_service = AIDescriptionService()
 
 # Start file watcher on startup (disabled by default)
 @app.on_event("startup")
@@ -299,26 +303,109 @@ async def health_check():
 
 @app.get("/api/watcher/status")
 async def get_watcher_status():
-    """Get the current status of the file watcher"""
+    """Get the current status of the file watcher service"""
     return file_watcher.get_status()
 
 @app.post("/api/watcher/toggle")
 async def toggle_watcher(enable: bool = True):
-    """Enable or disable the file watcher"""
-    if enable:
-        success = file_watcher.start()
-        if success:
-            return {"status": "success", "message": "File watcher started"}
+    """Enable or disable the file watcher service"""
+    try:
+        if enable:
+            if not file_watcher.watching:
+                file_watcher.start()
+                print("File watcher started")
+            status = "running"
         else:
-            return {"status": "warning", "message": "File watcher already running"}
-    else:
-        success = file_watcher.stop()
-        if success:
-            return {"status": "success", "message": "File watcher stopped"}
-        else:
-            return {"status": "warning", "message": "File watcher already stopped"}
+            if file_watcher.watching:
+                file_watcher.stop()
+                print("File watcher stopped")
+            status = "stopped"
+            
+        return {"status": status}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to toggle watcher: {str(e)}")
+
+@app.post("/api/models/suggest-columns")
+async def suggest_columns(request: Request):
+    """Generate column suggestions for a model using AI"""
+    try:
+        data = await request.json()
+        model_name = data.get("model_name")
+        existing_columns = data.get("existing_columns", [])
+        
+        if not model_name:
+            raise HTTPException(status_code=400, detail="Model name is required")
+        
+        suggestions = await ai_service.suggest_columns(model_name, existing_columns)
+        return suggestions
+    except Exception as e:
+        print(f"Error suggesting columns: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to suggest columns: {str(e)}")
+
+@app.post("/api/models/suggest-description")
+async def suggest_column_description(request: Request):
+    """Generate a description for a column using AI"""
+    try:
+        data = await request.json()
+        model_name = data.get("model_name")
+        column_name = data.get("column_name")
+        column_type = data.get("column_type")
+        
+        if not all([model_name, column_name, column_type]):
+            raise HTTPException(status_code=400, detail="Model name, column name, and column type are required")
+        
+        description = await ai_service.suggest_column_description(model_name, column_name, column_type)
+        return {"description": description}
+    except Exception as e:
+        print(f"Error suggesting column description: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to suggest column description: {str(e)}")
+
+@app.post("/api/models/{model_id}/columns")
+async def add_column(model_id: str, request: Request):
+    """Add a new column to a model"""
+    try:
+        column_data = await request.json()
+        model = metadata_service.get_model(model_id)
+        
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found")
+        
+        # Add column to model
+        if "columns" not in model:
+            model["columns"] = []
+            
+        # Create the new column object
+        new_column = {
+            "name": column_data.get("name"),
+            "type": column_data.get("type", "string"),
+            "description": column_data.get("description", ""),
+            "isPrimaryKey": column_data.get("isPrimaryKey", False),
+            "isForeignKey": column_data.get("isForeignKey", False)
+        }
+        
+        # Check if a column with this name already exists
+        existing_names = [col.get("name") for col in model["columns"]]
+        if new_column["name"] in existing_names:
+            raise HTTPException(status_code=400, detail=f"Column with name '{new_column['name']}' already exists")
+            
+        # Add the column
+        model["columns"].append(new_column)
+        
+        # Update the model
+        updated = metadata_service.update_model(model_id, model)
+        if not updated:
+            raise HTTPException(status_code=500, detail="Failed to update model")
+            
+        return {"status": "success", "message": "Column added successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error adding column: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to add column: {str(e)}")
 
 if __name__ == "__main__":
-    host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", "8000"))
-    uvicorn.run("backend.main:app", host=host, port=port, reload=True)
+    port = int(os.environ.get("API_PORT", 8000))
+    host = os.environ.get("API_HOST", "0.0.0.0")
+    
+    # The reload option is only used in development
+    uvicorn.run("main:app", host=host, port=port, reload=True)

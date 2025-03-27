@@ -37,7 +37,8 @@
           "user_edited": false
         }
       ],
-      "file_path": "models\\example\\my_first_dbt_model.sql"
+      "file_path": "models\\example\\my_first_dbt_model.sql",
+      "tags": []
     },
     {
       "id": "ecommerce_project_my_second_dbt_model",
@@ -56,7 +57,8 @@
           "user_edited": false
         }
       ],
-      "file_path": "models\\example\\my_second_dbt_model.sql"
+      "file_path": "models\\example\\my_second_dbt_model.sql",
+      "tags": []
     },
     {
       "id": "ecommerce_project_stg_orders",
@@ -96,7 +98,8 @@
           "user_edited": false
         }
       ],
-      "file_path": "models\\example\\stg_orders.sql"
+      "file_path": "models\\example\\stg_orders.sql",
+      "tags": []
     },
     {
       "id": "analytics_project_analytics_orders",
@@ -136,7 +139,8 @@
           "user_edited": false
         }
       ],
-      "file_path": "models\\example\\analytics_orders.sql"
+      "file_path": "models\\example\\analytics_orders.sql",
+      "tags": []
     },
     {
       "id": "analytics_project_my_first_dbt_model",
@@ -157,7 +161,8 @@
       ],
       "file_path": "models\\example\\my_first_dbt_model.sql",
       "ai_description": "This dbt model, `my_first_dbt_model`, creates a table named `my_first_dbt_model` in the data warehouse. It generates a single column, `id`, which contains the integer value 1 and a null value. The model's primary function is to demonstrate basic dbt functionality and serves as a starting point for more complex data transformations. The SQL code defines a source data CTE and then selects all columns from it, with an optional filter to exclude null `id` values.",
-      "user_edited": false
+      "user_edited": false,
+      "tags": []
     },
     {
       "id": "analytics_project_my_second_dbt_model",
@@ -178,7 +183,8 @@
       ],
       "file_path": "models\\example\\my_second_dbt_model.sql",
       "ai_description": "Here's a description of the `my_second_dbt_model` dbt model:\n\nThis dbt model, part of the `analytics_project`, filters data from the `my_first_dbt_model`. It selects all columns from `my_first_dbt_model` but only includes rows where the `id` column equals 1. This model produces a subset of the data from the first model, focusing on a specific record. Its role in the data pipeline is to provide a filtered view, potentially for specific analysis or downstream reporting.",
-      "user_edited": false
+      "user_edited": false,
+      "tags": []
     },
     {
       "id": "my_test_project_my_first_dbt_model",
@@ -218,7 +224,8 @@
           "user_edited": false
         }
       ],
-      "file_path": "models\\example\\my_first_dbt_model.sql"
+      "file_path": "models\\example\\my_first_dbt_model.sql",
+      "tags": []
     },
     {
       "id": "my_test_project_my_second_dbt_model",
@@ -258,7 +265,8 @@
           "user_edited": false
         }
       ],
-      "file_path": "models\\example\\my_second_dbt_model.sql"
+      "file_path": "models\\example\\my_second_dbt_model.sql",
+      "tags": []
     },
     {
       "id": "my_test_project_stg_campaigns",
@@ -303,11 +311,19 @@
           "description": "The `budget` column in the `stg_campaigns` model stores the numeric budget allocated to each marketing campaign. This column directly reflects the budget value from the `public.raw_campaigns` source, serving as a key metric for campaign performance analysis. No transformations are applied to the budget value in this staging model.",
           "ai_description": "The `budget` column in the `stg_campaigns` model stores the numeric budget allocated to each marketing campaign. This column directly reflects the budget value from the `public.raw_campaigns` source, serving as a key metric for campaign performance analysis. No transformations are applied to the budget value in this staging model.",
           "user_edited": false
+        },
+        {
+          "name": "campaign_status",
+          "type": "string",
+          "description": "The current status of the campaign (e.g., 'active', 'paused', 'completed', 'draft').",
+          "isPrimaryKey": false,
+          "isForeignKey": false
         }
       ],
       "file_path": "models\\example\\stg_campaigns.sql",
       "ai_description": "The `stg_campaigns` dbt model in the `my_test_project` project serves as a staging layer for campaign data. It selects and structures campaign information from the `public.raw_campaigns` source, including campaign ID, name, start and end dates, and budget. This model transforms raw campaign data into a standardized format, making it suitable for downstream analysis and reporting. It plays a crucial role in the data pipeline by providing a clean and consistent foundation for further data transformations and aggregations. No significant transformations or business logic are applied in this model; it is a straightforward selection and casting of columns.",
-      "user_edited": false
+      "user_edited": false,
+      "tags": []
     },
     {
       "id": "my_test_project_stg_orders",
@@ -344,10 +360,18 @@
           "type": "character varying(20)",
           "description": "The `status` column in the `stg_orders` staging model stores the order status, such as \"shipped\" or \"pending\", extracted from the raw orders data. This column is crucial for understanding the current state of each order within the staging layer. It provides a direct representation of the order's progress and is used for filtering and analysis.",
           "ai_description": "The `status` column in the `stg_orders` staging model stores the order status, such as \"shipped\" or \"pending\", extracted from the raw orders data. This column is crucial for understanding the current state of each order within the staging layer. It provides a direct representation of the order's progress and is used for filtering and analysis.",
-          "user_edited": false
+          "user_edited": true
+        },
+        {
+          "name": "total_amount",
+          "type": "float",
+          "description": "The total amount of the order",
+          "is_primary_key": false,
+          "is_foreign_key": false
         }
       ],
-      "file_path": "models\\example\\stg_orders.sql"
+      "file_path": "models\\example\\stg_orders.sql",
+      "tags": []
     },
     {
       "id": "my_test_project_raw_orders",

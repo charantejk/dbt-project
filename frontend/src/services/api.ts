@@ -221,7 +221,8 @@ export const toggleWatcher = async (enable: boolean): Promise<any> => {
   return response.data;
 };
 
-export default {
+// Create a default export object with all functions
+const apiService = {
   getProjects,
   getModels,
   getModel,
@@ -236,4 +237,6 @@ export default {
   exportMetadataToYaml,
   getWatcherStatus,
   toggleWatcher,
-}; 
+};
+
+export default apiService; 

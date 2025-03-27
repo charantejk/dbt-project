@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Card, Descriptions, Table, Tag, Space, Tabs, Button, message, Tooltip, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 import DescriptionEdit from './DescriptionEdit';
-import { DatabaseOutlined, TableOutlined, SyncOutlined, FileOutlined, FolderOutlined, RobotOutlined } from '@ant-design/icons';
+import { DatabaseOutlined, FileOutlined, FolderOutlined, RobotOutlined, ColumnHeightOutlined } from '@ant-design/icons';
 import { refreshModelMetadata } from '../services/api';
+import ColumnSuggestions from './ColumnSuggestions';
 
 const { TabPane } = Tabs;
 const { Text } = Typography;
@@ -41,7 +42,8 @@ interface ModelDetailViewProps {
 
 const ModelDetailView: React.FC<ModelDetailViewProps> = ({ model, onDescriptionUpdated }) => {
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  
+  const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+
   const handleRefreshMetadata = async () => {
     try {
       setRefreshing(true);
@@ -55,6 +57,29 @@ const ModelDetailView: React.FC<ModelDetailViewProps> = ({ model, onDescriptionU
       message.error({ content: 'Failed to refresh AI descriptions', key: 'refresh' });
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handleAddColumn = async (column: any) => {
+    try {
+      // Make API call to add the column
+      const response = await fetch(`/api/models/${model.id}/columns`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(column),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to add column: ${response.statusText}`);
+      }
+      
+      // Update the UI
+      onDescriptionUpdated();
+    } catch (error) {
+      console.error('Error adding column:', error);
+      message.error('Failed to add column');
     }
   };
 
@@ -134,16 +159,27 @@ const ModelDetailView: React.FC<ModelDetailViewProps> = ({ model, onDescriptionU
           </Space>
         }
         extra={
-          <Tooltip title="Refresh AI descriptions for this model and its columns (AI descriptions are also auto-generated during metadata refresh)">
-            <Button 
-              icon={<RobotOutlined />} 
-              onClick={handleRefreshMetadata}
-              loading={refreshing}
-              type="primary"
-            >
-              Refresh AI Descriptions
-            </Button>
-          </Tooltip>
+          <Space>
+            <Tooltip title="Refresh AI descriptions for this model and its columns">
+              <Button 
+                icon={<RobotOutlined />} 
+                onClick={handleRefreshMetadata}
+                loading={refreshing}
+                type="primary"
+              >
+                Refresh AI Descriptions
+              </Button>
+            </Tooltip>
+            <Tooltip title="Toggle column suggestions">
+              <Button 
+                icon={<ColumnHeightOutlined />} 
+                onClick={() => setShowSuggestions(!showSuggestions)}
+                type={showSuggestions ? "default" : "primary"}
+              >
+                {showSuggestions ? "Hide Suggestions" : "Show Column Suggestions"}
+              </Button>
+            </Tooltip>
+          </Space>
         }
       >
         <Descriptions bordered column={2}>
@@ -167,6 +203,16 @@ const ModelDetailView: React.FC<ModelDetailViewProps> = ({ model, onDescriptionU
           </Descriptions.Item>
         </Descriptions>
       </Card>
+
+      {showSuggestions && (
+        <Card style={{ marginBottom: '16px' }}>
+          <ColumnSuggestions 
+            modelName={model.name}
+            existingColumns={model.columns.map(col => col.name)}
+            onAddColumn={handleAddColumn}
+          />
+        </Card>
+      )}
 
       <Tabs defaultActiveKey="columns" type="card">
         <TabPane tab="Columns" key="columns">

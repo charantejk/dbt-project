@@ -1,10 +1,4 @@
-
-
-
-
-
-
-# DBT Metadata Explorer
+remove all the chartd# DBT Metadata Explorer
 
 A comprehensive web application for exploring, visualizing, and documenting your dbt projects' metadata with AI-enhanced descriptions.
 

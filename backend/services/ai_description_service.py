@@ -2,6 +2,7 @@ import os
 import json
 import requests
 from typing import Dict, Any, List, Optional
+from dotenv import load_dotenv
 
 class AIDescriptionService:
     """Service for generating AI descriptions for models and columns using Gemini API"""
@@ -17,7 +18,7 @@ class AIDescriptionService:
         
         # Updated to use gemini-2.0-flash-lite model as specified
         self.api_url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent"
-    
+
     def _make_api_request(self, prompt: str) -> Optional[str]:
         """Make a request to Gemini API to generate content"""
         if not self.api_key:
@@ -246,7 +247,11 @@ class AIDescriptionService:
                 if "content" in candidate and "parts" in candidate["content"]:
                     parts = candidate["content"]["parts"]
                     if parts and "text" in parts[0]:
-                        return parts[0]["text"].strip()
+                        # Return the full text without any truncation
+                        description = parts[0]["text"].strip()
+                        if description.endswith('...') or description.endswith('…'):
+                            print(f"Warning: Model description appears to be truncated: {description}")
+                        return description
             
             print("Unexpected response format from Gemini API for model description")
             return None
@@ -257,50 +262,118 @@ class AIDescriptionService:
     
     def enrich_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Enrich metadata with AI-generated descriptions"""
-        # Don't proceed if AI descriptions are disabled or the service is not available
+        # Check if API key is available
         if not self.api_key:
-            print("Skipping AI enrichment: No API key available")
+            print("Warning: No Gemini API key provided for AI descriptions. Returning original metadata.")
             return metadata
-        
-        print("Starting AI-based metadata enrichment...")
-        
-        # Make a deep copy of the metadata to avoid modifying the original
-        enriched_metadata = json.loads(json.dumps(metadata))
-        
-        # Get models list
-        models = enriched_metadata.get("models", [])
-        
-        # Process models (limit to 5 for testing/dev)
-        for i, model in enumerate(models[:5]):
-            model_name = model.get("name", "Unknown")
-            project_name = model.get("project", "Unknown")
             
-            # Skip models that already have descriptions unless forced
-            if model.get("description") and not model.get("refresh_description"):
-                continue
-            
-            print(f"Generating description for model {i+1}/5: {model_name}")
-            
-            # Generate model description
-            model_desc = self.generate_model_description(
-                model_name,
-                project_name,
-                model.get("sql", ""),
-                model.get("columns", [])
-            )
-            
-            if model_desc:
-                # Store AI description
-                model["ai_description"] = model_desc
+        print("Enriching metadata with AI-generated descriptions...")
+        
+        # Enrich model descriptions
+        if "models" in metadata and isinstance(metadata["models"], list):
+            for model in metadata["models"]:
+                if not model.get("description") or model.get("description") == "":
+                    # Get project name
+                    project_name = model.get("project", "Unknown")
+                    
+                    # Prepare SQL context if available
+                    sql_code = model.get("sql")
+                    
+                    # Prepare column information if available
+                    column_info = model.get("columns", [])
+                    
+                    # Generate model description
+                    description = self.generate_model_description(
+                        model_name=model.get("name", "Unknown"),
+                        project_name=project_name,
+                        sql_code=sql_code,
+                        column_info=column_info
+                    )
+                    
+                    if description:
+                        model["ai_description"] = description
+                        print(f"Added AI description for model: {model.get('name')}")
+                    
+                # Enrich column descriptions
+                if "columns" in model and isinstance(model["columns"], list):
+                    for column in model["columns"]:
+                        if not column.get("description") or column.get("description") == "":
+                            # Generate column description
+                            description = self.generate_column_description(
+                                column_name=column.get("name", "Unknown"),
+                                model_name=model.get("name", "Unknown"),
+                                sql_context=model.get("sql"),
+                                column_type=column.get("type"),
+                                table_context=model.get("description") or model.get("ai_description")
+                            )
+                            
+                            if description:
+                                column["ai_description"] = description
+                                print(f"Added AI description for column: {column.get('name')} in model: {model.get('name')}")
+                            
+        return metadata
+        
+    async def suggest_columns(self, model_name: str, existing_columns: List[str]) -> List[Dict]:
+        """Generate column suggestions for a model"""
+        prompt = f"""
+        I'm designing a dbt model named '{model_name}' that already has these columns:
+        {', '.join(existing_columns)}
+        
+        Please suggest 3-5 additional columns that would logically complement this model.
+        
+        For each suggested column, provide:
+        1. A clear name in snake_case format
+        2. The appropriate data type (string, integer, float, timestamp, boolean)
+        3. A brief but helpful description of what the column represents
+        
+        Format your response as a JSON array of objects like this:
+        [
+          {{"name": "column_name", "type": "data_type", "description": "Description of the column"}},
+          ...
+        ]
+        
+        Only include the JSON array in your response, nothing else.
+        """
+        
+        try:
+            result = self._make_api_request(prompt)
+            if not result:
+                return []
                 
-                # If no description exists at all, use the AI one as default
-                if not model.get("description"):
-                    model["description"] = model_desc
-                    model["user_edited"] = False
+            # Find the JSON part in the response
+            json_start = result.find('[')
+            json_end = result.rfind(']') + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                json_str = result[json_start:json_end]
+                suggestions = json.loads(json_str)
+                return suggestions
+            else:
+                print("Could not find JSON array in response")
+                return []
                 
-                # Clear refresh flag if it exists
-                if "refresh_description" in model:
-                    del model["refresh_description"]
+        except Exception as e:
+            print(f"Error suggesting columns: {str(e)}")
+            return []
+            
+    async def suggest_column_description(self, model_name: str, column_name: str, column_type: str) -> str:
+        """Generate a description for a column"""
+        prompt = f"""
+        For a dbt model named '{model_name}', write a clear, concise description (1-2 sentences) for this column:
         
-        # Return the enriched metadata
-        return enriched_metadata 
+        Column Name: {column_name}
+        Data Type: {column_type}
+        
+        The description should explain:
+        1. What this column represents
+        2. How it's used or what business value it provides
+        
+        Keep it brief but informative for data analysts.
+        """
+        
+        try:
+            result = self._make_api_request(prompt)
+            return result or ""
+        except Exception as e:
+            print(f"Error suggesting column description: {str(e)}")
+            return "" 
