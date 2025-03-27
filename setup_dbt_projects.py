@@ -1,5 +1,18 @@
 import os
+import json
 import shutil
+import subprocess
+import glob
+import re
+import sys
+from typing import Dict, Any
+
+# Add the backend folder to path so we can import from services
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backend'))
+
+# Import our services
+from backend.services.metadata_service import MetadataService
+from backend.services.dbt_metadata_parser import parse_dbt_projects, save_metadata
 
 def create_directories(path):
     """Create directories if they don't exist"""
@@ -375,4 +388,71 @@ SELECT * FROM campaign_performance"""
     )
 
 if __name__ == "__main__":
-    setup_dbt_projects() 
+    setup_mode = len(sys.argv) > 1 and sys.argv[1] == "setup"
+    run_tests = len(sys.argv) > 1 and sys.argv[1] == "test"
+    
+    if setup_mode:
+        print("Setting up dbt projects...")
+        setup_dbt_projects()
+    elif run_tests:
+        print("Running tests...")
+        # Run the SQL dependency tests
+        import unittest
+        from backend.tests.test_sql_dependency import TestSQLDependencyService
+        
+        test_suite = unittest.TestLoader().loadTestsFromTestCase(TestSQLDependencyService)
+        unittest.TextTestRunner(verbosity=2).run(test_suite)
+    else:
+        print("Refreshing metadata with enhanced lineage extraction...")
+        # Initialize the metadata service with the sample dbt projects
+        # Try different project paths based on where the projects might be
+        potential_paths = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "dbt_pk", "dbt"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample_dbt_projects"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "dbt_projects"),
+        ]
+        
+        projects_dir = None
+        for path in potential_paths:
+            if os.path.exists(path) and os.listdir(path):
+                projects_dir = path
+                break
+        
+        if not projects_dir:
+            print("Warning: No dbt projects found. Setting up sample projects...")
+            setup_dbt_projects()
+            projects_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample_dbt_projects")
+            
+            # Also copy to dbt_pk/dbt for compatibility with existing code
+            dbt_pk_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dbt_pk", "dbt")
+            os.makedirs(dbt_pk_dir, exist_ok=True)
+            for item in os.listdir(projects_dir):
+                src = os.path.join(projects_dir, item)
+                dst = os.path.join(dbt_pk_dir, item)
+                if os.path.isdir(src):
+                    shutil.copytree(src, dst, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(src, dst)
+            
+            projects_dir = dbt_pk_dir
+            
+        print(f"Using dbt projects directory: {projects_dir}")
+        metadata_service = MetadataService(dbt_projects_dir=projects_dir)
+        
+        # Refresh the metadata to extract lineage with the new SQL parsing approach
+        metadata_service.refresh()
+        
+        # Print summary of the extracted lineage
+        lineage = metadata_service.get_lineage()
+        print(f"\nExtracted {len(lineage)} lineage relationships")
+        
+        if lineage:
+            print("\nSample lineage relationships:")
+            for i, link in enumerate(lineage[:5]):
+                print(f"  {link.get('source', 'unknown')} → {link.get('target', 'unknown')} ({link.get('type', 'unknown')})")
+        
+        print("\nSetup and lineage extraction complete.")
+        print("\nTo run the application:")
+        print("1. Run the backend: ./start.sh")
+        print("2. In another terminal, run the frontend: cd frontend && npm start")
+        print("3. Open http://localhost:3000 in your browser") 

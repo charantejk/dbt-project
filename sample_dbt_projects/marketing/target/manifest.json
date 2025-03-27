@@ -1,0 +1,176 @@
+{
+  "metadata": {
+    "dbt_schema_version": "1.0",
+    "dbt_version": "1.0.0",
+    "generated_at": "2023-03-27T10:30:00Z",
+    "invocation_id": "marketing-invocation-12345",
+    "env": {
+      "user_id": "marketing-team",
+      "flags": {}
+    },
+    "project_id": "marketing",
+    "project_name": "marketing"
+  },
+  "nodes": {
+    "model.marketing.stg_campaigns": {
+      "unique_id": "model.marketing.stg_campaigns",
+      "name": "stg_campaigns",
+      "package_name": "marketing",
+      "path": "models/staging/stg_campaigns.sql",
+      "original_file_path": "models/staging/stg_campaigns.sql",
+      "resource_type": "model",
+      "root_path": ".",
+      "schema": "marketing",
+      "raw_sql": "SELECT * FROM raw_campaigns",
+      "compiled": true,
+      "compiled_sql": "SELECT campaign_id, name, start_date, end_date, budget FROM raw_campaigns",
+      "relation_name": "marketing.stg_campaigns",
+      "description": "Staging model for marketing campaigns",
+      "columns": {
+        "campaign_id": {
+          "name": "campaign_id",
+          "description": "Unique identifier for each marketing campaign",
+          "data_type": "int",
+          "tests": []
+        },
+        "name": {
+          "name": "name",
+          "description": "Name of the campaign",
+          "data_type": "varchar",
+          "tests": []
+        },
+        "start_date": {
+          "name": "start_date",
+          "description": "Start date of the campaign",
+          "data_type": "timestamp",
+          "tests": []
+        },
+        "end_date": {
+          "name": "end_date",
+          "description": "End date of the campaign",
+          "data_type": "timestamp",
+          "tests": []
+        },
+        "budget": {
+          "name": "budget",
+          "description": "Budget allocated for the campaign in USD",
+          "data_type": "decimal",
+          "tests": []
+        }
+      },
+      "depends_on": {
+        "nodes": []
+      }
+    },
+    "model.marketing.stg_interactions": {
+      "unique_id": "model.marketing.stg_interactions",
+      "name": "stg_interactions",
+      "package_name": "marketing",
+      "path": "models/staging/stg_interactions.sql",
+      "original_file_path": "models/staging/stg_interactions.sql",
+      "resource_type": "model",
+      "root_path": ".",
+      "schema": "marketing",
+      "raw_sql": "SELECT * FROM raw_interactions",
+      "compiled": true,
+      "compiled_sql": "SELECT interaction_id, customer_id, campaign_id, interaction_date, channel FROM raw_interactions",
+      "relation_name": "marketing.stg_interactions",
+      "description": "Staging model for customer interactions with marketing campaigns",
+      "columns": {
+        "interaction_id": {
+          "name": "interaction_id",
+          "description": "Unique identifier for each interaction",
+          "data_type": "int",
+          "tests": []
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "description": "Customer who interacted with the campaign",
+          "data_type": "int",
+          "tests": []
+        },
+        "campaign_id": {
+          "name": "campaign_id",
+          "description": "Marketing campaign identifier",
+          "data_type": "int",
+          "tests": []
+        },
+        "interaction_date": {
+          "name": "interaction_date",
+          "description": "Date and time of the interaction",
+          "data_type": "timestamp",
+          "tests": []
+        },
+        "channel": {
+          "name": "channel",
+          "description": "Channel through which the interaction occurred (email, social, web, etc.)",
+          "data_type": "varchar",
+          "tests": []
+        }
+      },
+      "depends_on": {
+        "nodes": []
+      }
+    },
+    "model.marketing.campaign_performance": {
+      "unique_id": "model.marketing.campaign_performance",
+      "name": "campaign_performance",
+      "package_name": "marketing",
+      "path": "models/marts/campaign_performance.sql",
+      "original_file_path": "models/marts/campaign_performance.sql",
+      "resource_type": "model",
+      "root_path": ".",
+      "schema": "marketing",
+      "raw_sql": "SELECT c.campaign_id, COUNT(i.interaction_id) as interaction_count, COUNT(DISTINCT i.customer_id) as unique_customers, SUM(r.total_amount) as revenue, SUM(r.total_amount) / c.budget as roi FROM {{ ref('stg_campaigns') }} c JOIN {{ ref('stg_interactions') }} i ON c.campaign_id = i.campaign_id JOIN {{ ref('order_revenue', 'finance') }} r ON i.customer_id = r.customer_id GROUP BY c.campaign_id, c.budget",
+      "compiled": true,
+      "compiled_sql": "SELECT c.campaign_id, COUNT(i.interaction_id) as interaction_count, COUNT(DISTINCT i.customer_id) as unique_customers, SUM(r.total_amount) as revenue, SUM(r.total_amount) / c.budget as roi FROM marketing.stg_campaigns c JOIN marketing.stg_interactions i ON c.campaign_id = i.campaign_id JOIN finance.order_revenue r ON i.customer_id = r.customer_id GROUP BY c.campaign_id, c.budget",
+      "relation_name": "marketing.campaign_performance",
+      "description": "Marketing campaign performance analysis",
+      "columns": {
+        "campaign_id": {
+          "name": "campaign_id",
+          "description": "Unique identifier for the marketing campaign",
+          "data_type": "int",
+          "tests": []
+        },
+        "interaction_count": {
+          "name": "interaction_count",
+          "description": "Total number of interactions with the campaign",
+          "data_type": "int",
+          "tests": []
+        },
+        "unique_customers": {
+          "name": "unique_customers",
+          "description": "Number of unique customers who interacted with the campaign",
+          "data_type": "int",
+          "tests": []
+        },
+        "revenue": {
+          "name": "revenue",
+          "description": "Total revenue attributed to the campaign",
+          "data_type": "decimal",
+          "tests": []
+        },
+        "roi": {
+          "name": "roi",
+          "description": "Return on investment (revenue / budget)",
+          "data_type": "decimal",
+          "tests": []
+        }
+      },
+      "depends_on": {
+        "nodes": ["model.marketing.stg_campaigns", "model.marketing.stg_interactions", "model.finance.order_revenue"]
+      }
+    }
+  },
+  "parent_map": {
+    "model.marketing.stg_campaigns": [],
+    "model.marketing.stg_interactions": [],
+    "model.marketing.campaign_performance": ["model.marketing.stg_campaigns", "model.marketing.stg_interactions", "model.finance.order_revenue"]
+  },
+  "child_map": {
+    "model.marketing.stg_campaigns": ["model.marketing.campaign_performance"],
+    "model.marketing.stg_interactions": ["model.marketing.campaign_performance"],
+    "model.marketing.campaign_performance": []
+  }
+} 

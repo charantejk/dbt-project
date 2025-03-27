@@ -1,9 +1,3 @@
-{{ 
-    config(
-        materialized='view'
-    )
-}}
-
 WITH source_data AS (
     SELECT
         order_id,
@@ -20,4 +14,4 @@ SELECT
     order_date,
     status,
     amount
-FROM source_data 
+FROM source_data

@@ -7,7 +7,11 @@ import {
   Column, 
   ColumnWithRelations, 
   UserCorrection,
-  ModelWithLineage
+  ModelWithLineage,
+  ColumnWithLineage,
+  ColumnLineage,
+  RelatedModel,
+  ColumnLineageLink
 } from '../types';
 
 // Clean any quotation marks from the API URL
@@ -100,6 +104,73 @@ export const getModel = async (id: string): Promise<Model> => {
 export const getModelWithLineage = async (id: string): Promise<ModelWithLineage> => {
   const response = await api.get<ModelWithLineage>(`/api/models/${id}/lineage`);
   return response.data;
+};
+
+interface ModelDetailResponse {
+  model: Model;
+  upstream: RelatedModel[];
+  downstream: RelatedModel[];
+  column_lineage?: {
+    columns: Array<{
+      id: number;
+      name: string;
+      data_type: string;
+      description?: string;
+    }>;
+    upstream_columns: { [key: string]: ColumnLineageLink[] };
+    downstream_columns: { [key: string]: ColumnLineageLink[] };
+  };
+}
+
+export const fetchModelDetail = async (modelId: string): Promise<ModelDetailResponse> => {
+  const [modelResponse, columnLineageResponse] = await Promise.all([
+    api.get<ModelDetailResponse>(`/models/${modelId}/lineage`),
+    api.get<any>(`/models/${modelId}/column-lineage`)
+  ]);
+
+  // Convert column lineage data to the format expected by the frontend
+  const processColumnLinks = (columns: any[], relationships: any) => {
+    const links: ColumnLineageLink[] = [];
+    columns.forEach(column => {
+      const columnId = column.id;
+      if (relationships[columnId]) {
+        relationships[columnId].forEach((rel: any) => {
+          links.push({
+            sourceColumn: rel.name,
+            targetColumn: column.name,
+            confidence: rel.confidence
+          });
+        });
+      }
+    });
+    return links;
+  };
+
+  // Add column lineage to each related model
+  const modelDetail: ModelDetailResponse = modelResponse.data;
+  if (columnLineageResponse?.data) {
+    modelDetail.column_lineage = columnLineageResponse.data;
+    
+    // Add column lineage to upstream models
+    modelDetail.upstream = modelDetail.upstream.map(model => ({
+      ...model,
+      column_lineage: processColumnLinks(
+        columnLineageResponse.data.columns,
+        columnLineageResponse.data.upstream_columns
+      ) || []  // Ensure column_lineage is always an array
+    }));
+
+    // Add column lineage to downstream models
+    modelDetail.downstream = modelDetail.downstream.map(model => ({
+      ...model,
+      column_lineage: processColumnLinks(
+        columnLineageResponse.data.columns,
+        columnLineageResponse.data.downstream_columns
+      ) || []  // Ensure column_lineage is always an array
+    }));
+  }
+
+  return modelDetail;
 };
 
 export const getLineage = async () => {
@@ -221,6 +292,31 @@ export const toggleWatcher = async (enable: boolean): Promise<any> => {
   return response.data;
 };
 
+// Columns
+export const getColumnLineage = async (columnId: number): Promise<ColumnWithLineage> => {
+  const response = await api.get<ColumnWithLineage>(`/columns/${columnId}/lineage`);
+  return response.data;
+};
+
+export const createColumnLineage = async (
+  upstreamColumnId: number, 
+  downstreamColumnId: number, 
+  confidence?: number
+): Promise<ColumnLineage> => {
+  const params = new URLSearchParams();
+  params.append('upstream_column_id', upstreamColumnId.toString());
+  params.append('downstream_column_id', downstreamColumnId.toString());
+  if (confidence !== undefined) params.append('confidence', confidence.toString());
+  
+  const response = await api.post(`/api/columns/lineage`, null, { params });
+  return response.data;
+};
+
+export const deleteColumnLineage = async (lineageId: number): Promise<any> => {
+  const response = await api.delete(`/api/columns/lineage/${lineageId}`);
+  return response.data;
+};
+
 // Create a default export object with all functions
 const apiService = {
   getProjects,
@@ -237,6 +333,10 @@ const apiService = {
   exportMetadataToYaml,
   getWatcherStatus,
   toggleWatcher,
+  getColumnLineage,
+  createColumnLineage,
+  deleteColumnLineage,
+  fetchModelDetail
 };
 
 export default apiService; 

@@ -150,21 +150,27 @@ const ModelsTable: React.FC<ModelsTableProps> = ({ models, projects, lineage }) 
     }
   };
 
-  // Check for cross-project connections
-  const hasCrossProjectConnection = (modelId: string): boolean => {
+  // For easier model ID conversions
+  function idToString(id: string | number): string {
+    return id.toString();
+  }
+
+  // Update the hasCrossProjectConnection function
+  const hasCrossProjectConnection = (modelId: string | number): boolean => {
+    const stringId = idToString(modelId);
     const connections = lineage.filter(
-      link => link.source === modelId || link.target === modelId
+      link => link.source === stringId || link.target === stringId
     );
     
     if (connections.length === 0) return false;
     
     // Find the model's project
-    const model = models.find(m => m.id === modelId);
+    const model = models.find(m => m.id === stringId);
     if (!model) return false;
     
     // Check if any connected model is from a different project
     for (const conn of connections) {
-      const connectedId = conn.source === modelId ? conn.target : conn.source;
+      const connectedId = conn.source === stringId ? conn.target : conn.source;
       const connectedModel = models.find(m => m.id === connectedId);
       
       if (connectedModel && connectedModel.project !== model.project) {
@@ -303,6 +309,11 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // For easier model ID conversions
+  function idToString(id: string | number): string {
+    return id.toString();
+  }
+
   // Set document title
   useEffect(() => {
     document.title = "DBT UI GENERATOR";
@@ -334,10 +345,10 @@ function App() {
         const modelsData = await getModels();
         setModels(modelsData);
         
-        // Check if any models have AI descriptions
+        // Check for AI descriptions
         const hasAI = modelsData.some(model => 
           model.ai_description || 
-          model.columns?.some(column => column.ai_description)
+          model.columns?.some(column => column.ai_description || false)
         );
         setHasAIDescriptions(hasAI);
         
@@ -346,14 +357,19 @@ function App() {
         for (const model of modelsData) {
           if (model.id) {
             try {
-              const modelWithLineage = await getModelWithLineage(model.id);
+              const modelWithLineage = await getModelWithLineage(idToString(model.id));
               
-              // Add upstream links
+              // Handle lineage links
               if (modelWithLineage.upstream) {
                 for (const upstream of modelWithLineage.upstream) {
                   lineageLinks.push({
                     source: upstream.id.toString(),
-                    target: model.id.toString()
+                    target: model.id.toString(),
+                    columnLinks: (upstream.column_lineage || []).map((col: any) => ({
+                      sourceColumn: col.sourceColumn,
+                      targetColumn: col.targetColumn,
+                      confidence: col.confidence
+                    }))
                   });
                 }
               }
@@ -498,7 +514,7 @@ function App() {
         <strong>Note:</strong> Models with the same name across different projects have been combined to simplify the visualization.
       </div>
       <div className="lineage-container">
-        <LineageGraph models={models} lineage={lineage} />
+        <LineageGraph models={models} lineage={lineage} showColumnLineage={true} />
       </div>
       <div className="lineage-legend">
         <div className="lineage-legend-item">

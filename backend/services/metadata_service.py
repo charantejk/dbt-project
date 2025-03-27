@@ -6,6 +6,7 @@ import re
 from typing import Dict, List, Any, Optional, Tuple
 from .dbt_metadata_parser import parse_dbt_projects, save_metadata
 from .ai_description_service import AIDescriptionService
+from .sql_dependency_service import SQLDependencyService
 
 class MetadataService:
     """Service for combining and processing dbt project metadata"""
@@ -33,6 +34,9 @@ class MetadataService:
         
         # Initialize AI description service if enabled
         self.ai_service = AIDescriptionService() if use_ai_descriptions else None
+        
+        # Initialize SQL dependency service
+        self.sql_dependency_service = SQLDependencyService()
         
         print(f"Initializing MetadataService:")
         print(f"- Base dir: {base_dir}")
@@ -247,64 +251,30 @@ class MetadataService:
                 
                 print(f"  Processed {model_count} models for project {project_name}")
                 
-                # Process lineage
-                lineage_data = []
-                model_by_name = {}
-                
-                # First, build a lookup of models by name
-                for model in models:
-                    name = model['name']
-                    if name not in model_by_name:
-                        model_by_name[name] = []
-                    model_by_name[name].append(model)
-                
-                # Now process each model for lineage
-                for model in models:
-                    # Get the SQL
-                    sql = model.get('sql', '')
-                    if not sql:
-                        continue
-                    
-                    # Look for source() references
-                    source_refs = re.findall(r'{{\s*source\([\'"]([^\'"]+)[\'"],\s*[\'"]([^\'"]+)[\'"]\)\s*}}', sql)
-                    for source_name, table_name in source_refs:
-                        # Find the referenced model in any project
-                        if table_name in model_by_name:
-                            for source_model in model_by_name[table_name]:
-                                lineage_data.append({
-                                    "source": source_model['id'],
-                                    "target": model['id'],
-                                    "type": "source"
-                                })
-                    
-                    # Look for ref() references
-                    ref_matches = re.findall(r'{{\s*ref\([\'"]([^\'"]+)[\'"]\)\s*}}', sql)
-                    for ref_name in ref_matches:
-                        # Find the referenced model in any project
-                        if ref_name in model_by_name:
-                            for ref_model in model_by_name[ref_name]:
-                                lineage_data.append({
-                                    "source": ref_model['id'],
-                                    "target": model['id'],
-                                    "type": "ref"
-                                })
-                
-                # Create the final metadata object
-                metadata = {
-                    "projects": projects,
-                    "models": models,
-                    "lineage": lineage_data
-                }
-                
-                print(f"\nParsing complete:")
-                print(f"  Projects: {len(projects)}")
-                print(f"  Models: {len(models)}")
-                print(f"  Lineage relationships: {len(lineage_data)}")
-                
-                return metadata
-            
             except Exception as e:
                 print(f"Error processing project {project_dir}: {str(e)}")
+        
+        # Create model lookup by name for faster access
+        model_by_name = {}
+        for model in models:
+            model_name = model.get('name', '')
+            if model_name:
+                if model_name not in model_by_name:
+                    model_by_name[model_name] = []
+                model_by_name[model_name].append(model)
+        
+        # Extract lineage using SQL dependency service
+        print("\nExtracting model lineage using advanced SQL parsing...")
+        lineage_data = self.sql_dependency_service.extract_lineage_from_models(models)
+        
+        print(f"Generated {len(lineage_data)} lineage relationships")
+        if lineage_data:
+            # Print a few sample lineage relationships
+            print("Sample lineage relationships:")
+            for i, lineage in enumerate(lineage_data[:5]):
+                source_model = next((m for m in models if m['id'] == lineage['source']), {"name": "unknown", "project": "unknown"})
+                target_model = next((m for m in models if m['id'] == lineage['target']), {"name": "unknown", "project": "unknown"})
+                print(f"  {source_model.get('project')}.{source_model.get('name')} → {target_model.get('project')}.{target_model.get('name')} ({lineage.get('type', 'unknown')})")
         
         # Create the final metadata object
         metadata = {

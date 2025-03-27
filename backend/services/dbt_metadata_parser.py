@@ -7,6 +7,10 @@ import re
 from typing import Dict, List, Any, Optional, Tuple
 import uuid
 import yaml
+from pathlib import Path
+from datetime import datetime
+from models.database import Project as DBProject, Model as DBModel, ColumnModel as DBColumn, Lineage as DBLineage, ColumnLineage as DBColumnLineage
+from services.sql_dependency_service import SQLDependencyExtractor
 
 def _extract_cross_project_sources(projects_dir, project_dirs):
     """Extract cross-project source references from source yaml files"""
@@ -727,6 +731,187 @@ def load_metadata(input_file: str = None) -> Dict[str, Any]:
         metadata = parse_dbt_projects()
         save_metadata(metadata, input_file)
         return metadata
+
+def get_models_from_dbt_manifest(project_path: str, manifest_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Extract model metadata from a dbt project manifest file."""
+    models = []
+    
+    if not manifest_path:
+        manifest_path = os.path.join(project_path, "target", "manifest.json")
+    
+    if not os.path.exists(manifest_path):
+        print(f"Warning: manifest file not found at {manifest_path}")
+        return models
+    
+    try:
+        with open(manifest_path, "r") as f:
+            manifest = json.load(f)
+        
+        # Extract base project name from the path
+        project_name = os.path.basename(project_path)
+        
+        # Process nodes (models)
+        for node_id, node in manifest.get("nodes", {}).items():
+            if node.get("resource_type") == "model":
+                model_name = node.get("name", "")
+                
+                # Skip if no name
+                if not model_name:
+                    continue
+                
+                # Get column metadata
+                columns = []
+                columns_data = node.get("columns", {})
+                for col_name, col_data in columns_data.items():
+                    column = {
+                        "name": col_name,
+                        "description": col_data.get("description", ""),
+                        "data_type": col_data.get("data_type", ""),
+                        "tests": col_data.get("tests", []),
+                    }
+                    columns.append(column)
+                
+                # Get SQL code
+                sql_path = node.get("original_file_path", "")
+                raw_sql = ""
+                compiled_sql = node.get("compiled_code", "")
+                
+                # Try to read the raw SQL file
+                if sql_path:
+                    try:
+                        full_sql_path = os.path.join(project_path, sql_path)
+                        if os.path.exists(full_sql_path):
+                            with open(full_sql_path, "r") as sql_file:
+                                raw_sql = sql_file.read()
+                    except Exception as e:
+                        print(f"Error reading SQL file {sql_path}: {str(e)}")
+                
+                # Create model metadata
+                model = {
+                    "id": f"{project_name}_{model_name}",  # Create a unique ID
+                    "name": model_name,
+                    "project": project_name,
+                    "schema": node.get("schema", ""),
+                    "database": node.get("database", ""),
+                    "description": node.get("description", ""),
+                    "file_path": sql_path,
+                    "raw_sql": raw_sql,
+                    "compiled_sql": compiled_sql,
+                    "materialized": node.get("config", {}).get("materialized", ""),
+                    "columns": columns,
+                    "depends_on": node.get("depends_on", {}).get("nodes", []),
+                }
+                
+                models.append(model)
+                
+        return models
+    
+    except Exception as e:
+        print(f"Error parsing dbt manifest: {str(e)}")
+        return []
+
+def extract_column_level_lineage(models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Extract column-level lineage from model SQL code
+    
+    Args:
+        models: List of model metadata dictionaries
+        
+    Returns:
+        List of column lineage relationships
+    """
+    column_lineage = []
+    
+    # Create a mapping of model ID to model
+    model_map = {model['id']: model for model in models}
+    
+    # Create a mapping of column names to column IDs for each model
+    model_column_map = {}
+    for model in models:
+        model_id = model['id']
+        model_column_map[model_id] = {}
+        for column in model.get('columns', []):
+            column_name = column['name']
+            # Generate a unique column ID
+            column_id = f"{model_id}_{column_name}"
+            model_column_map[model_id][column_name] = column_id
+    
+    # Initialize SQL dependency extractor
+    extractor = SQLDependencyExtractor()
+    
+    # Process each model
+    for model in models:
+        model_id = model['id']
+        compiled_sql = model.get('compiled_sql', '')
+        raw_sql = model.get('raw_sql', '')
+        
+        # Use compiled SQL if available, otherwise use raw SQL
+        sql_to_parse = compiled_sql if compiled_sql else raw_sql
+        
+        if not sql_to_parse:
+            continue
+        
+        # Extract column-level dependencies
+        _, column_dependencies = extractor.parse_sql(sql_to_parse)
+        
+        # Process each target column
+        for target_column, source_columns in column_dependencies.items():
+            # Skip if target column is not in the model
+            if target_column not in model_column_map.get(model_id, {}):
+                continue
+                
+            target_column_id = model_column_map[model_id][target_column]
+            
+            # Process each source column
+            for source_model_ref, source_column in source_columns:
+                # Try to find the source model
+                source_model_id = None
+                
+                # If it's a ref or source, try to find the model
+                if '(' in source_model_ref:  # It's likely a ref() or source()
+                    # Extract model name and project if present
+                    match = re.search(r'([^\s(]+)(?:\s+\(([^)]+)\))?', source_model_ref)
+                    if match:
+                        model_name = match.group(1)
+                        project_info = match.group(2) if match.group(2) else None
+                        
+                        # Find matching model
+                        for m_id, m in model_map.items():
+                            if m['name'] == model_name:
+                                if project_info and project_info.startswith('source:'):
+                                    # It's a source reference, skip for now
+                                    continue
+                                elif project_info and project_info in m['project']:
+                                    # Project specified and matches
+                                    source_model_id = m_id
+                                    break
+                                elif not project_info:
+                                    # No project specified, use the first match
+                                    source_model_id = m_id
+                                    break
+                
+                # If source model not found, skip
+                if not source_model_id:
+                    continue
+                
+                # Get actual column name if it includes table alias
+                if '.' in source_column:
+                    _, source_column = source_column.split('.', 1)
+                
+                # Skip if source column is not in the source model
+                if source_column not in model_column_map.get(source_model_id, {}):
+                    continue
+                    
+                source_column_id = model_column_map[source_model_id][source_column]
+                
+                # Create column lineage relationship
+                column_lineage.append({
+                    'upstream_column_id': source_column_id,
+                    'downstream_column_id': target_column_id,
+                    'confidence': 1.0  # Default confidence
+                })
+    
+    return column_lineage
 
 if __name__ == "__main__":
     metadata = parse_dbt_projects()

@@ -1,9 +1,3 @@
-{{ 
-    config(
-        materialized='view'
-    )
-}}
-
 WITH source_data AS (
     SELECT
         interaction_id,
@@ -24,4 +18,4 @@ SELECT
     channel,
     interaction_type,
     conversion_flag
-FROM source_data 
+FROM source_data

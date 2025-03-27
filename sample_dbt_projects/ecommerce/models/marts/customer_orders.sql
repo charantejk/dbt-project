@@ -1,9 +1,3 @@
-{{ 
-    config(
-        materialized='table'
-    )
-}}
-
 WITH customers AS (
     SELECT
         customer_id,
@@ -40,4 +34,4 @@ customer_orders AS (
     GROUP BY 1, 2, 3, 4, 5
 )
 
-SELECT * FROM customer_orders 
+SELECT * FROM customer_orders

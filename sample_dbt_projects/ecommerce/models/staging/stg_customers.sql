@@ -1,9 +1,3 @@
-{{ 
-    config(
-        materialized='view'
-    )
-}}
-
 WITH source_data AS (
     SELECT
         customer_id,
@@ -22,4 +16,4 @@ SELECT
     email,
     registration_date,
     segment
-FROM source_data 
+FROM source_data

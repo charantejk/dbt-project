@@ -75,6 +75,8 @@ class ColumnModel(Base):
     
     model = relationship("Model", back_populates="columns")
     tags = relationship("Tag", secondary=column_tag, back_populates="columns")
+    upstream_column_edges = relationship("ColumnLineage", foreign_keys="[ColumnLineage.downstream_column_id]", back_populates="downstream_column")
+    downstream_column_edges = relationship("ColumnLineage", foreign_keys="[ColumnLineage.upstream_column_id]", back_populates="upstream_column")
     
     def __repr__(self):
         return f"<Column(name='{self.name}')>"
@@ -91,6 +93,22 @@ class Lineage(Base):
     
     def __repr__(self):
         return f"<Lineage(upstream='{self.upstream_id}', downstream='{self.downstream_id}')>"
+
+class ColumnLineage(Base):
+    __tablename__ = 'column_lineage'
+    
+    id = SQLColumn(Integer, primary_key=True)
+    upstream_column_id = SQLColumn(Integer, ForeignKey('columns.id'))
+    downstream_column_id = SQLColumn(Integer, ForeignKey('columns.id'))
+    confidence = SQLColumn(Float, default=1.0)  # Confidence level for the lineage (1.0 = certain, lower values indicate less certainty)
+    created_at = SQLColumn(DateTime, default=datetime.datetime.utcnow)
+    updated_at = SQLColumn(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    upstream_column = relationship("ColumnModel", foreign_keys=[upstream_column_id], back_populates="downstream_column_edges")
+    downstream_column = relationship("ColumnModel", foreign_keys=[downstream_column_id], back_populates="upstream_column_edges")
+    
+    def __repr__(self):
+        return f"<ColumnLineage(upstream_column='{self.upstream_column_id}', downstream_column='{self.downstream_column_id}')>"
 
 class Tag(Base):
     __tablename__ = 'tags'

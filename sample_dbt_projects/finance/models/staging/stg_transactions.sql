@@ -1,9 +1,3 @@
-{{ 
-    config(
-        materialized='view'
-    )
-}}
-
 WITH source_data AS (
     SELECT
         transaction_id,
@@ -22,4 +16,4 @@ SELECT
     payment_method,
     amount,
     status
-FROM source_data 
+FROM source_data

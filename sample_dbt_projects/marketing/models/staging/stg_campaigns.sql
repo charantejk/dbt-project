@@ -1,9 +1,3 @@
-{{ 
-    config(
-        materialized='view'
-    )
-}}
-
 WITH source_data AS (
     SELECT
         campaign_id,
@@ -24,4 +18,4 @@ SELECT
     end_date,
     budget,
     target_segment
-FROM source_data 
+FROM source_data

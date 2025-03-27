@@ -1,0 +1,220 @@
+{
+  "metadata": {
+    "dbt_schema_version": "1.0",
+    "dbt_version": "1.0.0",
+    "generated_at": "2023-03-27T10:30:00Z",
+    "invocation_id": "ecommerce-invocation-12345",
+    "env": {
+      "user_id": "ecommerce-team",
+      "flags": {}
+    },
+    "project_id": "ecommerce",
+    "project_name": "ecommerce"
+  },
+  "nodes": {
+    "model.ecommerce.my_first_dbt_model": {
+      "unique_id": "model.ecommerce.my_first_dbt_model",
+      "name": "my_first_dbt_model",
+      "package_name": "ecommerce",
+      "path": "models/example/my_first_dbt_model.sql",
+      "original_file_path": "models/example/my_first_dbt_model.sql",
+      "resource_type": "model",
+      "root_path": ".",
+      "schema": "ecommerce",
+      "raw_sql": "SELECT 1 as id",
+      "compiled": true,
+      "compiled_sql": "SELECT 1 as id",
+      "relation_name": "ecommerce.my_first_dbt_model",
+      "description": "A starter dbt model",
+      "columns": {
+        "id": {
+          "name": "id",
+          "description": "The primary key for this table",
+          "data_type": "int",
+          "tests": []
+        }
+      },
+      "depends_on": {
+        "nodes": []
+      }
+    },
+    "model.ecommerce.my_second_dbt_model": {
+      "unique_id": "model.ecommerce.my_second_dbt_model",
+      "name": "my_second_dbt_model",
+      "package_name": "ecommerce",
+      "path": "models/example/my_second_dbt_model.sql",
+      "original_file_path": "models/example/my_second_dbt_model.sql",
+      "resource_type": "model",
+      "root_path": ".",
+      "schema": "ecommerce",
+      "raw_sql": "SELECT * FROM {{ ref('my_first_dbt_model') }}",
+      "compiled": true,
+      "compiled_sql": "SELECT * FROM ecommerce.my_first_dbt_model",
+      "relation_name": "ecommerce.my_second_dbt_model",
+      "description": "A model that builds on my_first_dbt_model",
+      "columns": {
+        "id": {
+          "name": "id",
+          "description": "The primary key for this table",
+          "data_type": "int",
+          "tests": []
+        }
+      },
+      "depends_on": {
+        "nodes": ["model.ecommerce.my_first_dbt_model"]
+      }
+    },
+    "model.ecommerce.stg_orders": {
+      "unique_id": "model.ecommerce.stg_orders",
+      "name": "stg_orders",
+      "package_name": "ecommerce",
+      "path": "models/staging/stg_orders.sql",
+      "original_file_path": "models/staging/stg_orders.sql",
+      "resource_type": "model",
+      "root_path": ".",
+      "schema": "ecommerce",
+      "raw_sql": "SELECT * FROM raw_orders",
+      "compiled": true,
+      "compiled_sql": "SELECT order_id, customer_id, order_date, status FROM raw_orders",
+      "relation_name": "ecommerce.stg_orders",
+      "description": "Staging model for orders",
+      "columns": {
+        "order_id": {
+          "name": "order_id",
+          "description": "Unique identifier for each order",
+          "data_type": "int",
+          "tests": []
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "description": "Identifier for the customer who placed the order",
+          "data_type": "int",
+          "tests": []
+        },
+        "order_date": {
+          "name": "order_date",
+          "description": "Date when the order was placed",
+          "data_type": "timestamp",
+          "tests": []
+        },
+        "status": {
+          "name": "status",
+          "description": "Current status of the order",
+          "data_type": "varchar",
+          "tests": []
+        }
+      },
+      "depends_on": {
+        "nodes": []
+      }
+    },
+    "model.ecommerce.stg_customers": {
+      "unique_id": "model.ecommerce.stg_customers",
+      "name": "stg_customers",
+      "package_name": "ecommerce",
+      "path": "models/staging/stg_customers.sql",
+      "original_file_path": "models/staging/stg_customers.sql",
+      "resource_type": "model",
+      "root_path": ".",
+      "schema": "ecommerce",
+      "raw_sql": "SELECT * FROM raw_customers",
+      "compiled": true,
+      "compiled_sql": "SELECT customer_id, name, email, signup_date FROM raw_customers",
+      "relation_name": "ecommerce.stg_customers",
+      "description": "Staging model for customers",
+      "columns": {
+        "customer_id": {
+          "name": "customer_id",
+          "description": "Unique identifier for each customer",
+          "data_type": "int",
+          "tests": []
+        },
+        "name": {
+          "name": "name",
+          "description": "Customer's full name",
+          "data_type": "varchar",
+          "tests": []
+        },
+        "email": {
+          "name": "email",
+          "description": "Customer's email address",
+          "data_type": "varchar",
+          "tests": []
+        },
+        "signup_date": {
+          "name": "signup_date",
+          "description": "Date when the customer signed up",
+          "data_type": "timestamp",
+          "tests": []
+        }
+      },
+      "depends_on": {
+        "nodes": []
+      }
+    },
+    "model.ecommerce.customer_orders": {
+      "unique_id": "model.ecommerce.customer_orders",
+      "name": "customer_orders",
+      "package_name": "ecommerce",
+      "path": "models/marts/customer_orders.sql",
+      "original_file_path": "models/marts/customer_orders.sql",
+      "resource_type": "model",
+      "root_path": ".",
+      "schema": "ecommerce",
+      "raw_sql": "SELECT o.order_id, o.customer_id, c.name as customer_name, o.order_date, o.status FROM {{ ref('stg_orders') }} o JOIN {{ ref('stg_customers') }} c ON o.customer_id = c.customer_id",
+      "compiled": true,
+      "compiled_sql": "SELECT o.order_id, o.customer_id, c.name as customer_name, o.order_date, o.status FROM ecommerce.stg_orders o JOIN ecommerce.stg_customers c ON o.customer_id = c.customer_id",
+      "relation_name": "ecommerce.customer_orders",
+      "description": "Combined customer and order information",
+      "columns": {
+        "order_id": {
+          "name": "order_id",
+          "description": "Unique identifier for the order",
+          "data_type": "int",
+          "tests": []
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "description": "Identifier for the customer",
+          "data_type": "int",
+          "tests": []
+        },
+        "customer_name": {
+          "name": "customer_name",
+          "description": "Name of the customer",
+          "data_type": "varchar",
+          "tests": []
+        },
+        "order_date": {
+          "name": "order_date",
+          "description": "Date when the order was placed",
+          "data_type": "timestamp",
+          "tests": []
+        },
+        "status": {
+          "name": "status",
+          "description": "Current status of the order",
+          "data_type": "varchar",
+          "tests": []
+        }
+      },
+      "depends_on": {
+        "nodes": ["model.ecommerce.stg_orders", "model.ecommerce.stg_customers"]
+      }
+    }
+  },
+  "parent_map": {
+    "model.ecommerce.my_first_dbt_model": [],
+    "model.ecommerce.my_second_dbt_model": ["model.ecommerce.my_first_dbt_model"],
+    "model.ecommerce.stg_orders": [],
+    "model.ecommerce.stg_customers": [],
+    "model.ecommerce.customer_orders": ["model.ecommerce.stg_orders", "model.ecommerce.stg_customers"]
+  },
+  "child_map": {
+    "model.ecommerce.my_first_dbt_model": ["model.ecommerce.my_second_dbt_model"],
+    "model.ecommerce.my_second_dbt_model": [],
+    "model.ecommerce.stg_orders": ["model.ecommerce.customer_orders"],
+    "model.ecommerce.stg_customers": ["model.ecommerce.customer_orders"],
+    "model.ecommerce.customer_orders": ["model.finance.order_revenue"]
+  }
+} 

@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from sqlalchemy import or_, func
 
-from backend.models.schema import Column, ColumnWithRelations
+from backend.models.schema import Column, ColumnWithRelations, ColumnWithLineage
 from backend.models.database import (
     ColumnModel as DBColumn,  # Updated import
     Model as DBModel, 
-    Project as DBProject
+    Project as DBProject,
+    ColumnLineage as DBColumnLineage
 )
 from backend.services.database import get_db
+from backend.services.model_service import ColumnService
 
 router = APIRouter(
     prefix="/columns",
@@ -109,6 +111,17 @@ def get_column(column_id: int, db: Session = Depends(get_db)):
     
     return ColumnWithRelations(**column_dict)
 
+@router.get("/{column_id}/lineage", response_model=ColumnWithLineage)
+def get_column_lineage(column_id: int, db: Session = Depends(get_db)):
+    """Get column-level lineage for a specific column"""
+    column_service = ColumnService(db)
+    result = column_service.get_column_lineage_by_id(column_id)
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Column not found")
+    
+    return result
+
 @router.get("/search/related")
 def find_related_columns(
     column_name: str = Query(..., description="Column name to search for"),
@@ -137,4 +150,76 @@ def find_related_columns(
             # "ai_description": column.ai_description  # Comment out AI field
         })
     
-    return results 
+    return results
+
+@router.post("/lineage", response_model=Dict[str, Any])
+def create_column_lineage(
+    upstream_column_id: int = Query(..., description="ID of the upstream (source) column"),
+    downstream_column_id: int = Query(..., description="ID of the downstream (target) column"),
+    confidence: float = Query(1.0, description="Confidence level of the lineage relationship (0.0-1.0)"),
+    db: Session = Depends(get_db)
+):
+    """Create a column-level lineage relationship between two columns"""
+    # Check if both columns exist
+    upstream_column = db.query(DBColumn).filter(DBColumn.id == upstream_column_id).first()
+    downstream_column = db.query(DBColumn).filter(DBColumn.id == downstream_column_id).first()
+    
+    if not upstream_column or not downstream_column:
+        raise HTTPException(status_code=404, detail="One or both columns not found")
+    
+    # Check if lineage already exists
+    existing_lineage = db.query(DBColumnLineage).filter(
+        DBColumnLineage.upstream_column_id == upstream_column_id,
+        DBColumnLineage.downstream_column_id == downstream_column_id
+    ).first()
+    
+    if existing_lineage:
+        # Update confidence if needed
+        if existing_lineage.confidence != confidence:
+            existing_lineage.confidence = confidence
+            db.commit()
+        
+        return {
+            "id": existing_lineage.id,
+            "upstream_column_id": upstream_column_id,
+            "downstream_column_id": downstream_column_id,
+            "confidence": confidence,
+            "created": False,
+            "updated": True
+        }
+    
+    # Create new lineage
+    new_lineage = DBColumnLineage(
+        upstream_column_id=upstream_column_id,
+        downstream_column_id=downstream_column_id,
+        confidence=confidence
+    )
+    
+    db.add(new_lineage)
+    db.commit()
+    db.refresh(new_lineage)
+    
+    return {
+        "id": new_lineage.id,
+        "upstream_column_id": upstream_column_id,
+        "downstream_column_id": downstream_column_id,
+        "confidence": confidence,
+        "created": True,
+        "updated": False
+    }
+
+@router.delete("/lineage/{lineage_id}", response_model=Dict[str, Any])
+def delete_column_lineage(lineage_id: int, db: Session = Depends(get_db)):
+    """Delete a column-level lineage relationship"""
+    lineage = db.query(DBColumnLineage).filter(DBColumnLineage.id == lineage_id).first()
+    
+    if not lineage:
+        raise HTTPException(status_code=404, detail="Lineage relationship not found")
+    
+    db.delete(lineage)
+    db.commit()
+    
+    return {
+        "id": lineage_id,
+        "deleted": True
+    } 

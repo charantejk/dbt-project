@@ -72,6 +72,22 @@ class Lineage(LineageBase):
     class Config:
         orm_mode = True
 
+class ColumnLineageBase(BaseModel):
+    upstream_column_id: int
+    downstream_column_id: int
+    confidence: float = 1.0
+
+class ColumnLineageCreate(ColumnLineageBase):
+    pass
+
+class ColumnLineage(ColumnLineageBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        orm_mode = True
+
 class ProjectBase(BaseModel):
     name: str
     path: str
@@ -131,11 +147,21 @@ class ColumnWithRelations(Column):
     class Config:
         orm_mode = True
 
+class ColumnWithLineage(Column):
+    model_name: str
+    project_name: str
+    upstream_columns: List[Dict[str, Any]] = []
+    downstream_columns: List[Dict[str, Any]] = []
+    
+    class Config:
+        orm_mode = True
+
 class MetadataExport(BaseModel):
     projects: List[Dict[str, Any]]
     models: List[Dict[str, Any]]
     columns: List[Dict[str, Any]]
     lineage: List[Dict[str, Any]]
+    column_lineage: List[Dict[str, Any]] = []
 
 # Comment out AI-related models
 # class ModelSuggestion(BaseModel):

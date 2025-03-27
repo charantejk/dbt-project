@@ -62,6 +62,7 @@ The DBT Metadata Explorer is built with a modern architecture:
 1. **Backend**: Python FastAPI application that parses dbt projects and serves metadata through RESTful APIs
 2. **Frontend**: React TypeScript application that provides an intuitive UI for exploring the metadata
 3. **AI Integration**: Google's Gemini API for generating intelligent descriptions of models and columns
+4. **Advanced Lineage Extraction**: SQL parsing for accurate data lineage detection
 
 ### Backend Components
 
@@ -73,12 +74,14 @@ The backend handles several key functions:
 4. **AI Description Generation**: Uses Gemini API to generate human-readable descriptions
 5. **File Watching**: Monitors dbt projects for changes and updates metadata automatically
 6. **API Endpoints**: Provides RESTful APIs for the frontend to consume
+7. **Advanced SQL Parsing**: Extracts table dependencies from SQL code for accurate lineage
 
 The main components are:
 - `metadata_service.py`: Core service that processes dbt metadata
 - `dbt_metadata_parser.py`: Parses dbt manifest files
 - `ai_description_service.py`: Generates AI descriptions using Gemini
 - `file_watcher_service.py`: Monitors for file changes
+- `sql_dependency_service.py`: Advanced SQL parsing for lineage extraction
 
 ### Frontend Components
 
@@ -100,11 +103,12 @@ Key components include:
 ### Data Flow
 
 1. The backend scans dbt projects and extracts metadata
-2. AI descriptions are generated for models and columns
-3. The frontend fetches this data via API calls
-4. Users can browse, search, and visualize the unified schema
-5. Users can edit AI-generated descriptions, which are saved back to the backend
-6. Changes to dbt projects are detected automatically, and metadata is refreshed
+2. SQL code is parsed to extract table dependencies and build lineage graphs
+3. AI descriptions are generated for models and columns
+4. The frontend fetches this data via API calls
+5. Users can browse, search, and visualize the unified schema
+6. Users can edit AI-generated descriptions, which are saved back to the backend
+7. Changes to dbt projects are detected automatically, and metadata is refreshed
 
 ### Key Features
 
@@ -114,6 +118,30 @@ Key components include:
 - **User Corrections**: Allows users to refine AI-generated descriptions
 - **Dynamic Documentation**: Updates automatically as dbt models change
 - **Export Functionality**: Exports schema and metadata in JSON/YAML format
+- **Advanced Lineage Extraction**: Uses SQL parsing to extract accurate lineage relationships
+
+## Advanced Lineage Extraction
+
+The project incorporates advanced SQL parsing techniques, inspired by ChartDB, to extract accurate lineage relationships:
+
+### How It Works
+
+1. **SQL Parsing**: Uses both regex-based detection and structured SQL parsing to extract table dependencies
+2. **dbt Macro Support**: Detects and processes dbt-specific macros like `ref()` and `source()`
+3. **Schema Resolution**: Resolves schema and table references across projects
+4. **Dependency Graph**: Creates a complete directed graph of model dependencies
+
+### Testing the Lineage Extraction
+
+Run the lineage extraction tests:
+```bash
+./extract_lineage.sh
+```
+
+Or run the tests directly:
+```bash
+python setup_dbt_projects.py test
+```
 
 ## Troubleshooting
 
@@ -127,6 +155,11 @@ Key components include:
 - If the backend can't find your dbt projects, check the path provided to `--projects-dir`
 
 - For AI description issues, ensure your Gemini API key is correctly set in the `.env` file
+
+- If you encounter SQL parsing issues, check that `sqlparse` and `sqlglot` are installed:
+  ```bash
+  pip install sqlparse sqlglot
+  ```
 
 ### Frontend Issues
 

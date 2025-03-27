@@ -1,13 +1,14 @@
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
-from ..models.models import Model, ModelWithLineage, RelatedModel
+from ..models.models import Model, ModelWithLineage, RelatedModel, Column, ColumnWithLineage
 # from ..models.models import ModelSuggestion  # Commented out AI-related import
 from ..db.models import (
     Model as DBModel,
     Project as DBProject,
-    ColumnModel,
+    ColumnModel as DBColumn,
     Lineage as DBLineage,
+    ColumnLineage as DBColumnLineage,
     # ModelSuggestion as DBModelSuggestion  # Commented out AI-related import
 )
 
@@ -131,7 +132,7 @@ class ModelService:
             DBModel, 
             DBProject.name.label('project_name'),
             func.count(DBColumn.id).label('column_count'),
-            DBModelRelation.source_is_source.label('is_source')
+            DBLineage.id.label('lineage_id')
         ).join(
             DBProject,
             DBModel.project_id == DBProject.id
@@ -139,21 +140,22 @@ class ModelService:
             DBColumn,
             DBModel.id == DBColumn.model_id
         ).join(
-            DBModelRelation,
-            DBModel.id == DBModelRelation.source_model_id
+            DBLineage,
+            DBModel.id == DBLineage.upstream_id
         ).filter(
-            DBModelRelation.target_model_id == model_id
+            DBLineage.downstream_id == model_id
         ).group_by(
             DBModel.id,
             DBProject.id,
-            DBModelRelation.source_is_source
+            DBLineage.id
         ).all()
         
         # Get downstream models (children)
         downstream_query = self.db.query(
             DBModel,
             DBProject.name.label('project_name'),
-            func.count(DBColumn.id).label('column_count')
+            func.count(DBColumn.id).label('column_count'),
+            DBLineage.id.label('lineage_id')
         ).join(
             DBProject,
             DBModel.project_id == DBProject.id
@@ -161,13 +163,14 @@ class ModelService:
             DBColumn,
             DBModel.id == DBColumn.model_id
         ).join(
-            DBModelRelation,
-            DBModel.id == DBModelRelation.target_model_id
+            DBLineage,
+            DBModel.id == DBLineage.downstream_id
         ).filter(
-            DBModelRelation.source_model_id == model_id
+            DBLineage.upstream_id == model_id
         ).group_by(
             DBModel.id,
-            DBProject.id
+            DBProject.id,
+            DBLineage.id
         ).all()
         
         # Format upstream models
@@ -177,7 +180,7 @@ class ModelService:
                 'id': result[0].id,
                 'name': result[0].name,
                 'project_name': result[1],
-                'is_source': result[3]
+                'lineage_id': result[3]
             }
             upstream_models.append(RelatedModel(**model_data))
         
@@ -187,7 +190,8 @@ class ModelService:
             model_data = {
                 'id': result[0].id,
                 'name': result[0].name,
-                'project_name': result[1]
+                'project_name': result[1],
+                'lineage_id': result[3]
             }
             downstream_models.append(RelatedModel(**model_data))
         
@@ -217,3 +221,146 @@ class ModelService:
     #         suggestions.append(ModelSuggestion(**suggestion_data))
     #         
     #     return suggestions 
+
+class ColumnService:
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def get_column_by_id(self, column_id: int) -> Optional[Column]:
+        """Get a single column by ID"""
+        result = self.db.query(
+            DBColumn,
+            DBModel.name.label('model_name'),
+            DBProject.name.label('project_name')
+        ).join(
+            DBModel,
+            DBColumn.model_id == DBModel.id
+        ).join(
+            DBProject,
+            DBModel.project_id == DBProject.id
+        ).filter(
+            DBColumn.id == column_id
+        ).first()
+        
+        if not result:
+            return None
+        
+        column_data = result[0].__dict__
+        column_data['model_name'] = result[1]
+        column_data['project_name'] = result[2]
+        
+        # Remove SQLAlchemy instance state
+        if '_sa_instance_state' in column_data:
+            del column_data['_sa_instance_state']
+        
+        return Column(**column_data)
+    
+    def get_columns_by_model_id(self, model_id: int) -> List[Column]:
+        """Get all columns for a specific model"""
+        results = self.db.query(
+            DBColumn,
+            DBModel.name.label('model_name'),
+            DBProject.name.label('project_name')
+        ).join(
+            DBModel,
+            DBColumn.model_id == DBModel.id
+        ).join(
+            DBProject,
+            DBModel.project_id == DBProject.id
+        ).filter(
+            DBModel.id == model_id
+        ).all()
+        
+        columns = []
+        for result in results:
+            column_data = result[0].__dict__
+            column_data['model_name'] = result[1]
+            column_data['project_name'] = result[2]
+            
+            # Remove SQLAlchemy instance state
+            if '_sa_instance_state' in column_data:
+                del column_data['_sa_instance_state']
+            
+            columns.append(Column(**column_data))
+        
+        return columns
+    
+    def get_column_lineage_by_id(self, column_id: int) -> Optional[ColumnWithLineage]:
+        """Get column with its upstream and downstream lineage"""
+        # Get the column first
+        column = self.get_column_by_id(column_id)
+        if not column:
+            return None
+        
+        # Get upstream columns (parents)
+        upstream_query = self.db.query(
+            DBColumn,
+            DBModel.name.label('model_name'),
+            DBProject.name.label('project_name'),
+            DBColumnLineage.confidence.label('confidence')
+        ).join(
+            DBModel,
+            DBColumn.model_id == DBModel.id
+        ).join(
+            DBProject,
+            DBModel.project_id == DBProject.id
+        ).join(
+            DBColumnLineage,
+            DBColumn.id == DBColumnLineage.upstream_column_id
+        ).filter(
+            DBColumnLineage.downstream_column_id == column_id
+        ).all()
+        
+        # Get downstream columns (children)
+        downstream_query = self.db.query(
+            DBColumn,
+            DBModel.name.label('model_name'),
+            DBProject.name.label('project_name'),
+            DBColumnLineage.confidence.label('confidence')
+        ).join(
+            DBModel,
+            DBColumn.model_id == DBModel.id
+        ).join(
+            DBProject,
+            DBModel.project_id == DBProject.id
+        ).join(
+            DBColumnLineage,
+            DBColumn.id == DBColumnLineage.downstream_column_id
+        ).filter(
+            DBColumnLineage.upstream_column_id == column_id
+        ).all()
+        
+        # Format upstream columns
+        upstream_columns = []
+        for result in upstream_query:
+            column_data = result[0].__dict__
+            column_data['model_name'] = result[1]
+            column_data['project_name'] = result[2]
+            column_data['confidence'] = result[3]
+            
+            # Remove SQLAlchemy instance state
+            if '_sa_instance_state' in column_data:
+                del column_data['_sa_instance_state']
+            
+            upstream_columns.append(column_data)
+        
+        # Format downstream columns
+        downstream_columns = []
+        for result in downstream_query:
+            column_data = result[0].__dict__
+            column_data['model_name'] = result[1]
+            column_data['project_name'] = result[2]
+            column_data['confidence'] = result[3]
+            
+            # Remove SQLAlchemy instance state
+            if '_sa_instance_state' in column_data:
+                del column_data['_sa_instance_state']
+            
+            downstream_columns.append(column_data)
+        
+        # Create the column with lineage
+        column_dict = column.dict()
+        column_dict['upstream_columns'] = upstream_columns
+        column_dict['downstream_columns'] = downstream_columns
+        
+        return ColumnWithLineage(**column_dict) 

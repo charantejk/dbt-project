@@ -2,7 +2,7 @@ name: 'ecommerce'
 version: '1.0.0'
 config-version: 2
 
-profile: 'default'
+profile: 'ecommerce'
 
 model-paths: ["models"]
 analysis-paths: ["analyses"]
@@ -11,26 +11,9 @@ seed-paths: ["seeds"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
-target-path: "target"
-clean-targets:
-  - "target"
-  - "dbt_packages"
-
-seeds:
-  ecommerce:
-    +enabled: true
-    raw_customers:
-      +column_types:
-        created_at: date
-        updated_at: date
-    raw_orders:
-      +column_types:
-        order_date: date
-        total_amount: float
-
 models:
   ecommerce:
     staging:
       +materialized: view
     marts:
-      +materialized: table 
+      +materialized: table

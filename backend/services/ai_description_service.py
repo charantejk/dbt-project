@@ -18,7 +18,7 @@ class AIDescriptionService:
         
         # Updated to use gemini-2.0-flash-lite model as specified
         self.api_url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent"
-
+    
     def _make_api_request(self, prompt: str) -> Optional[str]:
         """Make a request to Gemini API to generate content"""
         if not self.api_key:
@@ -311,7 +311,7 @@ class AIDescriptionService:
                                 column["ai_description"] = description
                                 print(f"Added AI description for column: {column.get('name')} in model: {model.get('name')}")
                             
-        return metadata
+            return metadata
         
     async def suggest_columns(self, model_name: str, existing_columns: List[str]) -> List[Dict]:
         """Generate column suggestions for a model"""

@@ -18,7 +18,7 @@ sys.path.insert(0, parent_dir)
 #   - "../my_custom_projects"  
 #   - "/Users/telvin/Desktop/dbt/some_other_projects"
 # ==============================
-DEFAULT_PROJECTS_DIR = "/Users/telvin/Desktop/dbt/pk"  # <-- EDIT THIS LINE
+DEFAULT_PROJECTS_DIR = "C:/Users/chara/OneDrive/Desktop/project/dbt-project/pk"  # <-- EDIT THIS LINE
 # ==============================
 
 # Parse command-line arguments

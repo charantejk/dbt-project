@@ -1,0 +1,112 @@
+{
+  "metadata": {
+    "dbt_schema_version": "1.0",
+    "dbt_version": "1.0.0",
+    "generated_at": "2023-03-27T10:30:00Z",
+    "invocation_id": "finance-invocation-12345",
+    "env": {
+      "user_id": "finance-team",
+      "flags": {}
+    },
+    "project_id": "finance",
+    "project_name": "finance"
+  },
+  "nodes": {
+    "model.finance.stg_transactions": {
+      "unique_id": "model.finance.stg_transactions",
+      "name": "stg_transactions",
+      "package_name": "finance",
+      "path": "models/staging/stg_transactions.sql",
+      "original_file_path": "models/staging/stg_transactions.sql",
+      "resource_type": "model",
+      "root_path": ".",
+      "schema": "finance",
+      "raw_sql": "SELECT * FROM raw_transactions",
+      "compiled": true,
+      "compiled_sql": "SELECT transaction_id, order_id, amount, transaction_date FROM raw_transactions",
+      "relation_name": "finance.stg_transactions",
+      "description": "Staging model for transactions",
+      "columns": {
+        "transaction_id": {
+          "name": "transaction_id",
+          "description": "Unique identifier for each transaction",
+          "data_type": "int",
+          "tests": []
+        },
+        "order_id": {
+          "name": "order_id",
+          "description": "Foreign key to the orders table",
+          "data_type": "int",
+          "tests": []
+        },
+        "amount": {
+          "name": "amount",
+          "description": "Transaction amount in USD",
+          "data_type": "decimal",
+          "tests": []
+        },
+        "transaction_date": {
+          "name": "transaction_date",
+          "description": "Date when the transaction occurred",
+          "data_type": "timestamp",
+          "tests": []
+        }
+      },
+      "depends_on": {
+        "nodes": []
+      }
+    },
+    "model.finance.order_revenue": {
+      "unique_id": "model.finance.order_revenue",
+      "name": "order_revenue",
+      "package_name": "finance",
+      "path": "models/marts/order_revenue.sql",
+      "original_file_path": "models/marts/order_revenue.sql",
+      "resource_type": "model",
+      "root_path": ".",
+      "schema": "finance",
+      "raw_sql": "SELECT co.order_id, co.customer_id, SUM(t.amount) as total_amount, COUNT(*) as transaction_count FROM customer_orders co JOIN {{ ref('stg_transactions') }} t ON co.order_id = t.order_id GROUP BY co.order_id, co.customer_id",
+      "compiled": true,
+      "compiled_sql": "SELECT co.order_id, co.customer_id, SUM(t.amount) as total_amount, COUNT(*) as transaction_count FROM ecommerce.customer_orders co JOIN finance.stg_transactions t ON co.order_id = t.order_id GROUP BY co.order_id, co.customer_id",
+      "relation_name": "finance.order_revenue",
+      "description": "Order revenue aggregated from transactions",
+      "columns": {
+        "order_id": {
+          "name": "order_id",
+          "description": "Order identifier from the ecommerce system",
+          "data_type": "int",
+          "tests": []
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "description": "Customer identifier",
+          "data_type": "int",
+          "tests": []
+        },
+        "total_amount": {
+          "name": "total_amount",
+          "description": "Sum of all transaction amounts for the order",
+          "data_type": "decimal",
+          "tests": []
+        },
+        "transaction_count": {
+          "name": "transaction_count",
+          "description": "Number of transactions associated with the order",
+          "data_type": "int",
+          "tests": []
+        }
+      },
+      "depends_on": {
+        "nodes": ["model.finance.stg_transactions", "model.ecommerce.customer_orders"]
+      }
+    }
+  },
+  "parent_map": {
+    "model.finance.stg_transactions": [],
+    "model.finance.order_revenue": ["model.finance.stg_transactions", "model.ecommerce.customer_orders"]
+  },
+  "child_map": {
+    "model.finance.stg_transactions": ["model.finance.order_revenue"],
+    "model.finance.order_revenue": ["model.marketing.campaign_performance"]
+  }
+} 
